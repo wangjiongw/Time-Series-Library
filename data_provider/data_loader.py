@@ -233,9 +233,9 @@ class Dataset_Custom(Dataset):
         cols = list(df_raw.columns)
         cols.remove(self.target)
         cols.remove('date')
-        df_raw = df_raw[['date'] + cols + [self.target]]
-        num_train = int(len(df_raw) * 0.7)
-        num_test = int(len(df_raw) * 0.2)
+        df_raw = df_raw[['date'] + cols + [self.target]]        # select columns
+        num_train = int(len(df_raw) * 0.7)                      # split train, test, vali via rows
+        num_test = int(len(df_raw) * 0.2)                       # 70% train, 20% test, 10% vali
         num_vali = len(df_raw) - num_train - num_test
         border1s = [0, num_train - self.seq_len, len(df_raw) - num_test - self.seq_len]
         border2s = [num_train, num_train + num_vali, len(df_raw)]
@@ -243,10 +243,10 @@ class Dataset_Custom(Dataset):
         border2 = border2s[self.set_type]
 
         if self.features == 'M' or self.features == 'MS':
-            cols_data = df_raw.columns[1:]
+            cols_data = df_raw.columns[1:]      # bypass datetime
             df_data = df_raw[cols_data]
         elif self.features == 'S':
-            df_data = df_raw[[self.target]]
+            df_data = df_raw[[self.target]]     # auto-regressive prediction; 
 
         if self.scale:
             train_data = df_data[border1s[0]:border2s[0]]
@@ -368,6 +368,126 @@ class Dataset_M4(Dataset):
             insample[i, -len(ts):] = ts_last_window
             insample_mask[i, -len(ts):] = 1.0
         return insample, insample_mask
+    
+
+class Dataset_TradeX(Dataset):
+    def __init__(self, root_path, flag='train', size=None,
+                 features='S', data_path='ETTh1.csv',
+                 target='hpr_3,hpr_5,hpr_15', scale=True, 
+                 timeenc=0, freq='t', seasonal_patterns=None,
+                 rolling_win=0):
+        # size [seq_len, label_len, pred_len]
+        # info
+        if size == None:
+            self.seq_len = 512
+            self.label_len = 256
+            self.pred_len = 512
+        else:
+            self.seq_len = size[0]
+            self.label_len = size[1]
+            self.pred_len = size[2]
+        # init
+        assert flag in ['train', 'test', 'val']
+        type_map = {'train': 0, 'val': 1, 'test': 2}
+        self.set_type = type_map[flag]
+
+        self.features = features
+        self.target = target.split(',')         # result in a list
+        self.scale = scale
+        self.timeenc = timeenc
+        self.freq = freq
+        self.rolling_win = rolling_win
+
+        self.root_path = root_path
+        self.data_path = data_path
+        self.__read_data__()
+
+    def __read_data__(self):
+        self.scaler = StandardScaler()
+        df_raw = pd.read_csv(os.path.join(self.root_path,
+                                          self.data_path))
+
+        '''
+        df_raw.columns: ['datetime', ...(other features), target feature1, target feature2, ...]
+        '''
+        cols = list(df_raw.columns)
+        cols.remove('datetime')
+        for target in self.target:
+            cols.remove(target)
+        
+        df_raw = df_raw[['datetime'] + cols + self.target]        # select columns
+        num_train = int(len(df_raw) * 0.7)                      # split train, test, vali via rows
+        num_test = int(len(df_raw) * 0.2)                       # 70% train, 20% test, 10% vali
+        num_vali = len(df_raw) - num_train - num_test
+        
+        border1s = [512, num_train - self.seq_len, len(df_raw) - num_test - self.seq_len]
+        # border1s = [0, num_train - self.seq_len, len(df_raw) - num_test - self.seq_len]
+        border2s = [num_train, num_train + num_vali, len(df_raw)]
+        border1 = border1s[self.set_type]
+        border2 = border2s[self.set_type]
+
+        if self.features == 'M' or self.features == 'MS':
+            cols_data = df_raw.columns[1:]      # bypass datetime
+            df_data = df_raw[cols_data]
+        elif self.features == 'S':
+            df_data = df_raw[self.target]     # auto-regressive prediction; 
+
+        # TODO: add new transformations
+        # moving_avg = df_data.rolling(window=self.rolling_win).mean()
+        moving_avg = df_data.rolling(window=512).mean()
+        data = (df_data - moving_avg) / df_data.rolling(window=512).std()
+        # if self.scale:
+        #     train_data = df_data[border1s[0]:border2s[0]]
+        #     self.scaler.fit(train_data.values)
+        #     data = self.scaler.transform(df_data.values)
+        # elif self.rolling_win > 0:      # rolling window normalization
+        #     moving_avg = df_data.rolling(window=self.rolling_win).mean()
+        #     data = (df_data - moving_avg) / df_data.rolling(window=self.rolling_win).std()
+        # elif self.std_norm:
+        #     # 波动率归一化
+        #     moving_std = df_data.rolling(window=self.rolling_win).std()
+        #     data = df_data / moving_std
+        # elif self.ewm:
+        #     # 指数平滑移动平均
+        #     data = data.ewm(alpha=0.2).mean()
+        # else:
+        #     # 不做归一化
+        #     data = df_data.values
+
+        df_stamp = df_raw[['datetime']][border1:border2]
+        df_stamp['datetime'] = pd.to_datetime(df_stamp.datetime)
+        if self.timeenc == 0:
+            df_stamp['month'] = df_stamp.date.apply(lambda row: row.month, 1)
+            df_stamp['day'] = df_stamp.date.apply(lambda row: row.day, 1)
+            df_stamp['weekday'] = df_stamp.date.apply(lambda row: row.weekday(), 1)
+            df_stamp['hour'] = df_stamp.date.apply(lambda row: row.hour, 1)
+            data_stamp = df_stamp.drop(['datetime'], 1).values
+        elif self.timeenc == 1:
+            data_stamp = time_features(pd.to_datetime(df_stamp['datetime'].values), freq=self.freq)
+            data_stamp = data_stamp.transpose(1, 0)
+
+        self.data_x = data[border1:border2]                     # input features
+        self.data_y = data[self.target][border1:border2]        # target features
+        self.data_stamp = data_stamp
+
+    def __getitem__(self, index):
+        s_begin = index
+        s_end = s_begin + self.seq_len
+        r_begin = s_end - self.label_len
+        r_end = r_begin + self.label_len + self.pred_len
+
+        seq_x = np.array(self.data_x[s_begin:s_end])
+        seq_y = np.array(self.data_y[r_begin:r_end])
+        seq_x_mark = np.array(self.data_stamp[s_begin:s_end])
+        seq_y_mark = np.array(self.data_stamp[r_begin:r_end])
+
+        return seq_x, seq_y, seq_x_mark, seq_y_mark
+
+    def __len__(self):
+        return len(self.data_x) - self.seq_len - self.pred_len + 1
+
+    def inverse_transform(self, data):
+        return self.scaler.inverse_transform(data)
 
 
 class PSMSegLoader(Dataset):
