@@ -9,6 +9,7 @@ def print_args(args):
     print(f'  {"Data Path:":<20}{args.data_path:<20}{"Features:":<20}{args.features:<20}')
     print(f'  {"Target:":<20}{args.target:<20}{"Freq:":<20}{args.freq:<20}')
     print(f'  {"Checkpoints:":<20}{args.checkpoints:<20}')
+    print(f'  {"EXP:":<20}{args.exp_dir:<20}')
     print()
 
     if args.task_name in ['long_term_forecast', 'short_term_forecast']:

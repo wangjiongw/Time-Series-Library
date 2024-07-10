@@ -5,7 +5,7 @@ model_name=DLinear
 python -u run.py \
   --task_name long_term_forecast \
   --is_training 1 \
-  --root_path ./dataset/TradeX \
+  --root_path ./data/TradeX \
   --data_path data_HC.csv \
   --features S \
   --target hpr_3 \

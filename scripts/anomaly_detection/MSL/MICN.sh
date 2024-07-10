@@ -3,7 +3,7 @@ export CUDA_VISIBLE_DEVICES=1
 python -u run.py \
   --task_name anomaly_detection \
   --is_training 1 \
-  --root_path ./dataset/MSL \
+  --root_path ./data/MSL \
   --model_id MSL \
   --model MICN \
   --data MSL \

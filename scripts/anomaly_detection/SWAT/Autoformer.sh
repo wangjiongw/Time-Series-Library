@@ -3,7 +3,7 @@ export CUDA_VISIBLE_DEVICES=1
 python -u run.py \
   --task_name anomaly_detection \
   --is_training 1 \
-  --root_path ./dataset/SWaT \
+  --root_path ./data/SWaT \
   --model_id SWAT \
   --model Autoformer \
   --data SWAT \

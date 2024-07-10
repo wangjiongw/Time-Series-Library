@@ -3,7 +3,7 @@ export CUDA_VISIBLE_DEVICES=7
 python -u run.py \
   --task_name anomaly_detection \
   --is_training 1 \
-  --root_path ./dataset/SMAP \
+  --root_path ./data/SMAP \
   --model_id SMAP \
   --model Transformer \
   --data SMAP \
