@@ -9,6 +9,9 @@ import os
 import time
 import warnings
 import numpy as np
+import wandb
+from datetime import datetime
+from tensorboardX import SummaryWriter
 
 warnings.filterwarnings('ignore')
 
@@ -77,6 +80,9 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         return total_loss
 
     def train(self, setting):
+        cur_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+        wandb.init(group=setting, project='TradeX', name=f"train_{cur_time}", reinit=True)
+        
         train_data, train_loader = self._get_data(flag='train')
         vali_data, vali_loader = self._get_data(flag='val')
         test_data, test_loader = self._get_data(flag='test')
@@ -142,6 +148,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
 
                 if (i + 1) % 100 == 0:
                     print("\titers: {0}, epoch: {1} | loss: {2:.7f}".format(i + 1, epoch + 1, loss.item()))
+                    wandb.log({'Iter_Loss/Train': loss.item(), 'epoch': epoch + 1, 'global_iter': epoch * train_steps + i + 1})
                     speed = (time.time() - time_now) / iter_count
                     left_time = speed * ((self.args.train_epochs - epoch) * train_steps - i)
                     print('\tspeed: {:.4f}s/iter; left time: {:.4f}s'.format(speed, left_time))
@@ -160,7 +167,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
             train_loss = np.average(train_loss)
             vali_loss = self.vali(vali_data, vali_loader, criterion)
             test_loss = self.vali(test_data, test_loader, criterion)
-
+            wandb.log({'Epoch_Loss/Train': train_loss, 'Epoch_Loss/Vali': vali_loss, 'Epoch_Loss/Test': test_loss, 'epoch': epoch + 1})
             print("Epoch: {0}, Steps: {1} | Train Loss: {2:.7f} Vali Loss: {3:.7f} Test Loss: {4:.7f}".format(
                 epoch + 1, train_steps, train_loss, vali_loss, test_loss))
             early_stopping(vali_loss, self.model, path)
@@ -173,7 +180,7 @@ class Exp_Long_Term_Forecast(Exp_Basic):
         # best_model_path = path + '/' + 'checkpoint.pth'
         best_model_path = os.path.join(path, 'checkpoint.pth')
         self.model.load_state_dict(torch.load(best_model_path))
-
+        wandb.finish()
         return self.model
 
     def test(self, setting, test=0):

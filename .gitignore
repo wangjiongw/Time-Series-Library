@@ -146,6 +146,7 @@ dmypy.json
 /run_tv.py
 
 /scripts/long_term_forecast/ETT_tv_script/
+/data/
 /dataset/
 data_factory_all.py
 data_loader_all.py
@@ -159,3 +160,5 @@ data_loader_all.py
 /scripts/exp_scripts/
 /results/
 /checkpoints/
+/experiments/
+/wandb/
